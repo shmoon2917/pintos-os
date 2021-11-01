@@ -207,7 +207,7 @@ fibonacci (int n)
 }
 
 int
-sum_of_four_int (int a, int b, int c, int d)
+max_of_four_int (int a, int b, int c, int d)
 {
   return syscall4 (SYS_MAX_OF_FOUR_INT, a, b, c, d);
 }
