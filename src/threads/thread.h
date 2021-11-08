@@ -94,12 +94,14 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+    int exit_status;
+    tid_t parent_tid;
+    struct semaphore child_sema;
+    struct file *files[128];
+    int file_cnt;
 #ifdef USERPROG
-    /* Owned by userprog/process.c. */
-    uint32_t *pagedir;                  /* Page directory. */
-    struct semaphore child_sync;
-    int child_status;
-    tid_t par_tid;
+      /* Owned by userprog/process.c. */
+      uint32_t *pagedir;                  /* Page directory. */
 #endif
 
     /* Owned by thread.c. */
@@ -142,7 +144,7 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-struct thread * tid_thread(tid_t tid);
+struct thread * get_thread_by_tid(tid_t tid);
 
 #endif /* threads/thread.h */
 

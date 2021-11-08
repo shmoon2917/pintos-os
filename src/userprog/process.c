@@ -20,7 +20,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-void makestack(char* filename, void **esp);
+void construct_stack(char* file_name, void **esp);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -46,8 +46,10 @@ process_execute (const char *file_name)
 
   // parsing command
   strlcpy(cmd, file_name, strlen(file_name) + 1);
-	while(1) {
-		if(cmd[i] == '\0' || cmd[i] == ' ') break;
+	while (1) {
+		if(cmd[i] == '\0' || cmd[i] == ' ') {
+      break;
+    }
 		i++;
 	}
 	cmd[i] = '\0';
@@ -61,7 +63,7 @@ process_execute (const char *file_name)
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
 
-  tid_thread(tid)->par_tid = thread_current()->tid;
+  get_thread_by_tid(tid)->parent_tid = thread_current()->tid;
 
   return tid;
 }
@@ -109,17 +111,21 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  struct thread * child = NULL;
-	int ret_stat;
+  // for hex_dump test
+  // while (1) { }
 
-	child = tid_thread(child_tid);
-	
-	if(child == NULL) return -1;
-	
+  struct thread * child_thread = NULL;
+	int exit_status = -1;
 
-	sema_down(&(child->child_sync));
-	ret_stat = thread_current()->child_status;
-	return ret_stat;
+	child_thread = get_thread_by_tid(child_tid);
+	
+	if (child_thread == NULL) {
+    return exit_status;
+  }
+	
+	sema_down(&(child_thread->child_sema));
+	exit_status = thread_current()->exit_status;
+	return exit_status;
 }
 
 /* Free the current process's resources. */
@@ -146,7 +152,7 @@ process_exit (void)
       pagedir_destroy (pd);
     }
   
-  sema_up(&(cur->child_sync));
+  sema_up(&(cur->child_sema));
 }
 
 /* Sets up the CPU for running user code in the current
@@ -254,14 +260,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   char cmd[256];
 
   strlcpy(cmd, file_name, strlen(file_name) + 1);
+  token = strtok_r(file_name, " " , &save_ptr);
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
-
-  token = strtok_r(file_name, " " , &save_ptr);
 
   /* Open executable file. */
   file = filesys_open (token);
@@ -280,7 +285,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
     {
-      printf ("load: %s: error loading executable\n", file_name);
+      printf ("load: %s: error loading executable\n", token);
       goto done; 
     }
 
@@ -347,13 +352,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (!setup_stack (esp))
     goto done;
 
-  
-  makestack(cmd, esp); 
+  construct_stack(cmd, esp); 
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
+
+  // hex_dump test for clear argument passing
+  // hex_dump(*esp, *esp, 100, true);
 
  done:
   /* We arrive here whether the load is successful or not. */
@@ -509,54 +516,76 @@ install_page (void *upage, void *kpage, bool writable)
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 
-void makestack(char* filename, void **esp){
-	char** arg;
-	int inputlen = 0;
-	inputlen = strlen(filename)+1;
-	int len = 0;
-	int result = 0;
-	int i = 0;
-	char tmp[256];
-	char* ptr;
-	char* token;
+void construct_stack(char* file_name, void **esp){
+  int i = 0;
+	char** argv;
+  int argc = 0;
+	int argv_len = strlen(file_name) + 1;
+	int total_len = 0;
 
-	strlcpy(tmp, filename, inputlen);
+	char temp_cmd[256];
+  char* token;
+	char* save_ptr;
+	
+	strlcpy(temp_cmd, file_name, argv_len);
        
-	token = strtok_r(filename, " ",&ptr);
-	while(token != NULL){ //토근 갯수 확인용
-		result++;
-		token = strtok_r(NULL, " ", &ptr); 
+	token = strtok_r(file_name, " ",&save_ptr);
+  // check argument count
+	while (token != NULL) { 
+		argc++;
+		token = strtok_r(NULL, " ", &save_ptr); 
 	}
-	arg = (char**)malloc(sizeof(char*)*result); 
-	token = strtok_r(tmp, " ", &ptr); //토큰화ㅏ 시작
-	for(i = 0 ; i<result; i++){
-		arg[i] = token;
-		token = strtok_r(NULL, " ", &ptr);
+
+  // memory dynamic allocation
+	argv = (char**)malloc(sizeof(char*) * argc); 
+
+  // tokenizing
+	token = strtok_r(temp_cmd, " ", &save_ptr);
+	for (i = 0 ; i < argc; i++) {
+		argv[i] = token;
+		token = strtok_r(NULL, " ", &save_ptr);
 	}
-	for(i = result-1; i>=0 ; i--){
-		inputlen = strlen(arg[i])+1;//null문자 포함시켜서 +1한겨
-		*esp -= inputlen;
-		len+=inputlen;
-		strlcpy(*esp, arg[i], inputlen);
-		arg[i] = *esp;
+
+  // save token(each argv)
+	for(i = argc - 1; i >= 0; i--){
+		argv_len = strlen(argv[i]) + 1;
+		*esp -= argv_len;
+		total_len += argv_len;
+
+		strlcpy(*esp, argv[i], argv_len);
+		argv[i] = *esp;
 	}
 	
-	int wordalign = len%4 == 0 ? 0 : 4-(len%4);
-	for(i = 0 ; i<wordalign ; i++){
-		*esp-=1;
-		**(uint8_t**)esp=0;
-	}
-	*esp -=4;//null pointer sentinel 추가지점
+  // process word align
+  if (total_len % 4 != 0) {
+	  int word_align_cnt = 4 - (total_len % 4);
+    for(i = 0 ; i < word_align_cnt; i++){
+      *esp -= 1;
+      **(uint8_t**)esp = 0;
+    }
+  }
+
+  // process null sentinel 
+	*esp -= 4;
 	**(uint32_t**)esp = 0;
-	for(i = result-1 ; i>= 0 ; i--){//agrv adress저장
-		*esp -=4;
-		**(uint32_t**)esp = arg[i];
+
+  // save argv address
+	for(i = argc - 1 ; i >= 0; i--){
+		*esp -= 4;
+		**(uint32_t**)esp = argv[i];
 	}
-	*esp -=4;//argv 저장
+
+	*esp -= 4;
 	**(uint32_t**)esp = *esp+4;
-	*esp-=4;//argc 저장
-	**(uint32_t**)esp = result;
-	*esp-=4;//return address 저장
+
+  // argc
+	*esp -= 4;
+	**(uint32_t**)esp = argc;
+
+  // return address
+  *esp -= 4;
 	**(uint32_t**)esp = 0;
-	free(arg);	
+
+  // memory free
+	free(argv);
 }

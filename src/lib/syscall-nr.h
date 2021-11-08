@@ -30,6 +30,7 @@ enum
     SYS_ISDIR,                  /* Tests if a fd represents a directory. */
     SYS_INUMBER,                 /* Returns the inode number for a fd. */
 
+    /* CSE4070 additional implementation */
     SYS_FIBONACCI,
     SYS_MAX_OF_FOUR_INT,
   };

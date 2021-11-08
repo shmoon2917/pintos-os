@@ -466,6 +466,10 @@ init_thread (struct thread *t, const char *name, int priority)
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
+
+  /* CSE4070 implementation */
+  sema_init(&(t->child_sema), 0);
+
   intr_set_level (old_level);
 }
 
@@ -583,16 +587,17 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-struct thread * tid_thread(tid_t num){
-	struct list_elem * list_it;
-	struct thread * child;
+struct thread * get_thread_by_tid(tid_t tid){
+  struct thread * child_thread;
+	struct list_elem * elem;
 
-	for(list_it = list_begin(&all_list); list_it != list_end(&all_list) ; list_it = list_next(list_it)){
-		child = list_entry(list_it, struct thread, allelem);
+	for(elem = list_begin(&all_list); elem != list_end(&all_list) ; elem = list_next(elem)){
+		child_thread = list_entry(elem, struct thread, allelem);
 
-		if(child->tid == num){
-			return child;
+		if(child_thread->tid == tid){
+			return child_thread;
 		}
 	}
+
 	return NULL;
 }

@@ -69,10 +69,10 @@
 	     "pushl %[number]; int $0x30; addl $20, %%esp"	\
                : "=a" (retval)                                  \
                : [number] "i" (NUMBER),                         \
-                 [arg0] "g" (ARG0),                             \
-                 [arg1] "g" (ARG1),                             \
-                 [arg2] "g" (ARG2),                             \
-	         [arg3] "g" (ARG3)				\
+                 [arg0] "r" (ARG0),                             \
+                 [arg1] "r" (ARG1),                             \
+                 [arg2] "r" (ARG2),                             \
+	               [arg3] "r" (ARG3)				\
                : "memory");                                     \
           retval;                                               \
         })
@@ -207,7 +207,7 @@ fibonacci (int n)
 }
 
 int
-max_of_four_int (int a, int b, int c, int d)
+max_of_four_int (int n1, int n2, int n3, int n4)
 {
-  return syscall4 (SYS_MAX_OF_FOUR_INT, a, b, c, d);
+  return syscall4 (SYS_MAX_OF_FOUR_INT, n1, n2, n3, n4);
 }
