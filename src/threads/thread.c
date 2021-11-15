@@ -71,6 +71,40 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+/* tid값으로 thread 리턴하는 함수 */
+struct thread *
+get_thread_by_tid (tid_t tid) {
+  struct thread * child_thread;
+	struct list_elem * elem;
+
+	for (elem = list_begin(&all_list); elem != list_end(&all_list); elem = list_next(elem)) {
+		child_thread = list_entry(elem, struct thread, allelem);
+
+		if (child_thread->tid == tid) {
+			return child_thread;
+		}
+	}
+
+	return NULL;
+}
+
+struct thread *
+get_loaded_unsuccess_thread () {
+  struct thread * child_thread;
+	struct list_elem * elem;
+
+	for (elem = list_begin(&all_list); elem != list_end(&all_list); elem = list_next(elem)) {
+		child_thread = list_entry(elem, struct thread, allelem);
+
+		if (child_thread->load_status == 2) {
+			return child_thread;
+		}
+	}
+
+	return NULL;
+}
+
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -463,13 +497,25 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
 
   /* CSE4070 implementation */
-  sema_init(&(t->child_sema), 0);
+  int i;
+  // load status init
+  t->load_status = 0;
+  // except STDIN / STDOUT fd
+  t->files_length = 2;
+  sema_init(&t->load_semaphore, 0);
+  sema_init(&t->wait_semaphore, 0);
+  sema_init(&t->exit_semaphore, 0);
 
+  for(i = 0; i < 256; i++) {
+    t->files[i] = NULL;
+  }
+  
   intr_set_level (old_level);
 }
 
@@ -586,18 +632,3 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
-
-struct thread * get_thread_by_tid(tid_t tid){
-  struct thread * child_thread;
-	struct list_elem * elem;
-
-	for(elem = list_begin(&all_list); elem != list_end(&all_list) ; elem = list_next(elem)){
-		child_thread = list_entry(elem, struct thread, allelem);
-
-		if(child_thread->tid == tid){
-			return child_thread;
-		}
-	}
-
-	return NULL;
-}

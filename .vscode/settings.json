@@ -5,6 +5,8 @@
         "init.h": "c",
         "syscall.h": "c",
         "syscall-nr.h": "c",
-        "vaddr.h": "c"
+        "vaddr.h": "c",
+        "file.h": "c",
+        "stdbool.h": "c"
     }
 }

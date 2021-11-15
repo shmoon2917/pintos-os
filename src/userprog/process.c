@@ -43,13 +43,13 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-
   // parsing command
   strlcpy(cmd, file_name, strlen(file_name) + 1);
-	while (1) {
-		if(cmd[i] == '\0' || cmd[i] == ' ') {
+	while (true) {
+		if (cmd[i] == '\0' || cmd[i] == ' ') {
       break;
     }
+
 		i++;
 	}
 	cmd[i] = '\0';
@@ -60,10 +60,22 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (cmd, PRI_DEFAULT, start_process, fn_copy);
+
+  /* CSE4070 implentation */
+  struct thread* thd = get_thread_by_tid(tid);
+  thd->parent_tid = thread_current()->tid;
+
+  // load semaphore waiting 처리
+  sema_down(&thd->load_semaphore);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
 
-  get_thread_by_tid(tid)->parent_tid = thread_current()->tid;
+  // multi-oom 해결
+  struct thread* temp_thd = get_loaded_unsuccess_thread();
+  if (temp_thd != NULL) {
+    return process_wait(-1);
+  }
 
   return tid;
 }
@@ -82,12 +94,26 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+  
+  // process load
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+
+  struct thread *cur_thd = thread_current();
+  // load semaphore wake up 처리
+  // sema_up(&cur_thd->load_semaphore);
+
+  if (!success) {
+    cur_thd->tid = -1;cur_thd->load_status = 2;
+    sema_up(&(thread_current()->load_semaphore));
+    exit(-1); 
+  } else {
+    sema_up(&(thread_current()->load_semaphore));
+  }
+  
+    
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -114,17 +140,19 @@ process_wait (tid_t child_tid UNUSED)
   // for hex_dump test
   // while (1) { }
 
-  struct thread * child_thread = NULL;
 	int exit_status = -1;
-
-	child_thread = get_thread_by_tid(child_tid);
+	struct thread *child_thread = get_thread_by_tid(child_tid);
 	
 	if (child_thread == NULL) {
     return exit_status;
   }
+
+  // wait semaphore wake up 처리
+  sema_up(&(child_thread->wait_semaphore));
+  // exit semaphore waiting 처리
+	sema_down(&(child_thread->exit_semaphore));
+  exit_status = thread_current()->exit_status;
 	
-	sema_down(&(child_thread->child_sema));
-	exit_status = thread_current()->exit_status;
 	return exit_status;
 }
 
@@ -152,7 +180,12 @@ process_exit (void)
       pagedir_destroy (pd);
     }
   
-  sema_up(&(cur->child_sema));
+  struct thread *parent_thd = get_thread_by_tid(cur->parent_tid);
+  parent_thd->exit_status = cur->exit_status;
+  // wait semaphore waiting 처리
+  sema_down(&(cur->wait_semaphore));
+  // exit semaphore wake up 처리
+  sema_up(&(cur->exit_semaphore));
 }
 
 /* Sets up the CPU for running user code in the current

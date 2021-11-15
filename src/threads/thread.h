@@ -94,11 +94,19 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
-    int exit_status;
-    tid_t parent_tid;
-    struct semaphore child_sema;
-    struct file *files[128];
-    int file_cnt;
+   /* CSE4070 implementation */
+   int exit_status;
+   // init: 0, load success 1, load unsuccess 2
+   int load_status;
+   struct semaphore load_semaphore;
+   struct semaphore wait_semaphore;
+   struct semaphore exit_semaphore;
+
+   
+   tid_t parent_tid;
+   int files_length;
+   struct file *files[256];
+
 #ifdef USERPROG
       /* Owned by userprog/process.c. */
       uint32_t *pagedir;                  /* Page directory. */
@@ -112,6 +120,9 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
+
+struct thread * get_thread_by_tid(tid_t tid);
+struct thread * get_thread_by_load_status();
 
 void thread_init (void);
 void thread_start (void);
@@ -143,8 +154,6 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-
-struct thread * get_thread_by_tid(tid_t tid);
 
 #endif /* threads/thread.h */
 
