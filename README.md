@@ -13,3 +13,8 @@
 
 1. file system 관련된 system call 구현(`create()`, `remove()`, `open()`, `seek()`, ...)
 2. protect critical section 구현(**Synchronization**)
+
+## project #3
+
+1. alarm clock 효율적으로 구현(busy waiting 대신 blocked state로 처리)
+2. thread priority scheduling 구현(with aging)
