@@ -7,6 +7,9 @@
         "syscall-nr.h": "c",
         "vaddr.h": "c",
         "file.h": "c",
-        "stdbool.h": "c"
+        "stdbool.h": "c",
+        "syn-read.h": "c",
+        "stdio.h": "c",
+        "serial.h": "c"
     }
 }
