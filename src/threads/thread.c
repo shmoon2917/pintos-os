@@ -15,6 +15,7 @@
 #include "userprog/process.h"
 #endif
 
+
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -74,14 +75,14 @@ static tid_t allocate_tid (void);
 /* tid값으로 thread 리턴하는 함수 */
 struct thread *
 get_thread_by_tid (tid_t tid) {
-  struct thread * child_thread;
+  struct thread * child_thd;
 	struct list_elem * elem;
 
 	for (elem = list_begin(&all_list); elem != list_end(&all_list); elem = list_next(elem)) {
-		child_thread = list_entry(elem, struct thread, allelem);
+		child_thd = list_entry(elem, struct thread, allelem);
 
-		if (child_thread->tid == tid) {
-			return child_thread;
+		if (child_thd->tid == tid) {
+			return child_thd;
 		}
 	}
 
@@ -90,14 +91,15 @@ get_thread_by_tid (tid_t tid) {
 
 struct thread *
 get_loaded_unsuccess_thread () {
-  struct thread * child_thread;
+  struct thread * child_thd;
 	struct list_elem * elem;
+  int load_status;
 
 	for (elem = list_begin(&all_list); elem != list_end(&all_list); elem = list_next(elem)) {
-		child_thread = list_entry(elem, struct thread, allelem);
-
-		if (child_thread->load_status == 2) {
-			return child_thread;
+		child_thd = list_entry(elem, struct thread, allelem);
+    load_status = child_thd->load_status;
+		if (load_status == 2) {
+			return child_thd;
 		}
 	}
 
@@ -498,12 +500,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   
-
   old_level = intr_disable ();
-  list_push_back (&all_list, &t->allelem);
-
+  
   /* CSE4070 implementation */
   int i;
+
+  list_push_back (&all_list, &t->allelem);  
   // load status init
   t->load_status = 0;
   // except STDIN / STDOUT fd
@@ -512,7 +514,7 @@ init_thread (struct thread *t, const char *name, int priority)
   sema_init(&t->wait_semaphore, 0);
   sema_init(&t->exit_semaphore, 0);
 
-  for(i = 0; i < 256; i++) {
+  for(i = 0; i < 128; i++) {
     t->files[i] = NULL;
   }
   

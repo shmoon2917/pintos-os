@@ -6,6 +6,11 @@
 #include <stdint.h>
 #include "threads/synch.h"
 
+// #ifndef USERPROG
+/* Project #3. */
+extern bool thread_prior_aging;
+// #endif
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -94,23 +99,26 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
-   /* CSE4070 implementation */
-   int exit_status;
-   // init: 0, load success 1, load unsuccess 2
-   int load_status;
-   struct semaphore load_semaphore;
-   struct semaphore wait_semaphore;
-   struct semaphore exit_semaphore;
+#ifdef USERPROG
+    /* Owned by userprog/process.c. */
+    uint32_t *pagedir;                  /* Page directory. */
+#endif
 
-   
+   int exit_status;
+   tid_t waiting_child;
    tid_t parent_tid;
    int files_length;
-   struct file *files[256];
+   // FAQ 35p. 메뉴얼에 따라 프로세스당 오픈할 수 있는 파일의 개수를 128개로 제한
+   struct file *files[128];
+      // 일어나야 하는 시간
+   int64_t wakeup_time;
 
-#ifdef USERPROG
-      /* Owned by userprog/process.c. */
-      uint32_t *pagedir;                  /* Page directory. */
-#endif
+   // child thread load를 기다려주기 위한 semaphore
+   struct semaphore load_semaphore;
+   // child thread exit를 기다려주기 위한 semaphore
+   struct semaphore wait_semaphore;
+   // parent thread가 exit_status를 받기까지 기다려주기 위한 semaphore
+   struct semaphore exit_semaphore;
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
@@ -122,7 +130,11 @@ struct thread
 extern bool thread_mlfqs;
 
 struct thread * get_thread_by_tid(tid_t tid);
-struct thread * get_thread_by_load_status();
+void thread_wake (int64_t ticks);
+void thread_sleep (int64_t ticks);
+bool compare_thread_by_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void thread_aging ();
+void thread_preempt ();
 
 void thread_init (void);
 void thread_start (void);
@@ -156,4 +168,3 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 #endif /* threads/thread.h */
-
