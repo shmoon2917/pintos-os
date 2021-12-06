@@ -4,17 +4,19 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 
-static void syscall_handler (struct intr_frame *);
-
 // global lock
-struct lock lock;
+struct lock rw_lock;
+static void syscall_handler (struct intr_frame *);
 
 void
 syscall_init (void) 
 {
+  // lock init
+  lock_init(&rw_lock);  
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -28,8 +30,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 
   syscall_number = *(uint32_t*)(f->esp);
-  // initialize lock
-  lock_init(&lock);
+  
 
   switch (syscall_number){
     case SYS_HALT: {
@@ -159,16 +160,16 @@ void halt (void) {
 void exit(int status) {
 	struct thread* curr = thread_current();
   curr->exit_status = status;
-  // curr->load_status = 0;
 
-  printf("%s: exit(%d)\n", curr->name, status);
-
-  // file close
-  for (int i = 2; i < 256; i++) {
+  // file close (except STDIN/STDOUT)
+  for (int i = 2; i < 128; i++) {
 		if (curr->files[i] != NULL) 
       close(i);
   }
-	
+
+  // curr->load_status = 0;
+
+  printf("%s: exit(%d)\n", curr->name, status);
 	thread_exit();
 }
 
@@ -181,12 +182,9 @@ int wait (pid_t pid) {
 }
 
 int read (int fd, void *buffer, unsigned size) {
-  if(!(fd >= 0 && fd < 256) || !is_user_vaddr(buffer + size)) {
+  if(!(fd >= 0 && fd < 128) || !is_user_vaddr(buffer + size)) {
     exit(-1);
   }
-
-  // locking 처리
-  lock_acquire(&lock);
 
   // STDIN 읽어오는 부분
   if (fd == 0) {
@@ -201,57 +199,55 @@ int read (int fd, void *buffer, unsigned size) {
       // *(uint8_t *)buff += 1;
     }
 
-    // unlocking 처리
-    lock_release(&lock);
     return i;
   } else {
+    // 이외
 		struct file *file = thread_current()->files[fd];
 
 		if (file == NULL) {
       // unlocking 처리
-      lock_release(&lock);
+      // lock_release(&lock);
 			exit(-1);
-      // return
 		}
 	
+    // locking 처리
+    lock_acquire(&rw_lock);
 		int byte = file_read(file, buffer, size);
-
     // unlocking 처리
-		lock_release(&lock);
+		lock_release(&rw_lock);
 
 		return byte;
   }
 }
 
 int write (int fd, const void *buffer, unsigned size) {
-  if(!(fd >= 0 && fd < 256) || !is_user_vaddr(buffer + size)) {
+  if(!(fd >= 0 && fd < 128) || !is_user_vaddr(buffer + size)) {
     exit(-1);
   }
-
-  // locking 처리
-  lock_acquire(&lock); 
 
   // STDOUT
 	if (fd == 1) {
 		putbuf(buffer, size);
 
 		return size;
-	} else if (fd >= 2 && fd < 256) {
+	} else if (fd >= 2 && fd < 128) {
 		struct file *file = thread_current()->files[fd];
 
 		if (file == NULL) {
 			// unlocking 처리
-      lock_release(&lock);
+      // lock_release(&lock);
 			exit(-1);
 		}
 	
+    // locking 처리
+    lock_acquire(&rw_lock); 
 		int byte = file_write(file, buffer, size);
     // unlocking 처리
-		lock_release(&lock);
+		lock_release(&rw_lock);
 		return byte;
   }
-
-	return -1;
+  
+  return -1;
 }
 
 int fibonacci (int n) {
@@ -278,10 +274,10 @@ bool create (const char *file, unsigned initial_size) {
   }
 
   // locking 처리
-  lock_acquire(&lock);
+  // lock_acquire(&lock);
   bool success = filesys_create(file, initial_size);
   // unlocking 처리
-  lock_release(&lock);
+  // lock_release(&lock);
   return success;
 }
 
@@ -291,10 +287,10 @@ bool remove (const char *file) {
   }
 
   // locking 처리
-  lock_acquire(&lock);
+  // lock_acquire(&lock);
   bool success = filesys_remove(file);
   // unlocking 처리
-  lock_release(&lock);
+  // lock_release(&lock);
 
   return success;
 }
@@ -304,8 +300,12 @@ int open (const char *file) {
     exit(-1);
   }
 
+  // locking 처리
+  // lock_acquire(&lock);
 	struct file *opened_file = filesys_open(file);
 	if (opened_file == NULL) {
+    // unlocking 처리
+    // lock_release(&lock);
 		return -1;
 	}
 
@@ -320,6 +320,9 @@ int open (const char *file) {
   thd->files[fd] = opened_file;
   thd->files_length += 1;
 
+  // unlocking 처리
+  // lock_release(&lock);
+
 	return fd;
 }
 
@@ -333,6 +336,7 @@ void close (int fd) {
 
   // file close and initialization
   file_close(file);
+  // for solving closd twice test case
 	thd->files[fd] = NULL;
 }
 
@@ -343,7 +347,8 @@ int filesize (int fd) {
     exit(-1);
   }
   
-  return file_length(thread_current()->files[fd]);
+  off_t size = file_length(thread_current()->files[fd]);
+  return size;
 }
 
 void seek (int fd, unsigned position) {
@@ -363,5 +368,6 @@ unsigned tell (int fd) {
     exit(-1);
   }
 
-	return file_tell(thread_current()->files[fd]);
+	off_t pos = file_tell(thread_current()->files[fd]);
+  return pos;
 }
